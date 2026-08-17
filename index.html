@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Игровой опросник</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+        body {
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .app { max-width: 600px; width: 100%; }
+        .card {
+            background: #1a1a2e;
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid #2a2a4a;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+        h1 { color: #e94560; margin-top: 0; text-align: center; font-size: 26px; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .row input {
+            flex: 1;
+            min-width: 200px;
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid #2a2a4a;
+            background: #12122a;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        .row input:focus { border-color: #e94560; }
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: #e94560;
+            color: #fff;
+        }
+        .btn:hover { transform: scale(0.97); background: #c73652; }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary { background: #2a2a4a; }
+        .btn-secondary:hover { background: #3a3a5a; }
+        .q-text { font-size: 20px; font-weight: 600; margin: 20px 0 12px 0; min-height: 50px; }
+        .q-input {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid #2a2a4a;
+            background: #12122a;
+            color: #fff;
+            font-size: 18px;
+            outline: none;
+        }
+        .q-input:focus { border-color: #e94560; }
+        .error { color: #ff6b6b; font-size: 14px; margin: 8px 0; min-height: 22px; }
+        .progress { color: #aaa; font-size: 14px; margin-top: 5px; }
+        .status {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-top: 12px;
+            display: none;
+        }
+        .status.success { display: block; background: #1a3a2a; border: 1px solid #2a6a3a; color: #8f8; }
+        .status.error { display: block; background: #3a1a1a; border: 1px solid #6a2a2a; color: #f88; }
+        .btn-group { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+        .footer { text-align: center; color: #555; font-size: 12px; margin-top: 20px; }
+        
+        @media (max-width: 600px) {
+            .card { padding: 18px; }
+            .row { flex-direction: column; }
+            .btn-group { flex-direction: column; }
+            .btn { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="card">
+        <h1>📊 Игровой опросник</h1>
+
+        <div id="stepNick">
+            <div class="row">
+                <input type="text" id="nickInput" placeholder="Введите игровой ник" maxlength="30" />
+                <button class="btn" id="startBtn">▶ Начать</button>
+            </div>
+            <div class="error" id="nickError"></div>
+        </div>
+
+        <div id="stepQuestions" style="display: none;">
+            <div class="progress" id="progressText">Вопрос 1 из 5</div>
+            <div class="q-text" id="questionText">Загрузка...</div>
+            <input class="q-input" type="number" id="answerInput" placeholder="Введите число..." step="any" />
+            <div class="error" id="answerError"></div>
+            <div class="btn-group">
+                <button class="btn" id="nextBtn">➜ Далее</button>
+                <button class="btn btn-secondary" id="resetBtn">↺ Отменить</button>
+            </div>
+            <div class="status" id="statusMsg"></div>
+        </div>
+
+        <div class="footer">Все ответы сохраняются в Google Таблицу</div>
+    </div>
+</div>
+
+<script>
+    // ✅ ССЫЛКА НА ВЕБ-ПРИЛОЖЕНИЕ (УЖЕ ВСТАВЛЕНА)
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfPrxLPoNdF2c3HdTALM3eGysDPhZp6bDO0XfDZDc3sUnbMG88WJUzo51SUwbBdTLO1g/exec';
+    
+    // 📝 ТВОИ ВОПРОСЫ (меняй как хочешь)
+    const QUESTIONS = [
+        "Сколько осколков Ват Тамбор?",
+        "Сколько осколков Ки-Ади Мунди?",
+        "Сколько осколков Малгуса?",
+        "Сколько осколков Командира Асоки Тано?",
+        "Сколько осколков Лезвия Бритвы?",
+        "Сколько осколков Отшельник Йода?:"
+    ];
+
+    // ===== НИЖЕ НИЧЕГО НЕ МЕНЯЙ =====
+    const state = {
+        nick: '',
+        answers: [],
+        currentIndex: 0,
+        isActive: false,
+        isSending: false, // ЗАЩИТА ОТ ДВОЙНОЙ ОТПРАВКИ
+    };
+
+    const stepNick = document.getElementById('stepNick');
+    const stepQuestions = document.getElementById('stepQuestions');
+    const nickInput = document.getElementById('nickInput');
+    const startBtn = document.getElementById('startBtn');
+    const nickError = document.getElementById('nickError');
+    const questionText = document.getElementById('questionText');
+    const answerInput = document.getElementById('answerInput');
+    const answerError = document.getElementById('answerError');
+    const nextBtn = document.getElementById('nextBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const progressText = document.getElementById('progressText');
+    const statusMsg = document.getElementById('statusMsg');
+
+    function clearErrors() {
+        if (nickError) nickError.textContent = '';
+        if (answerError) answerError.textContent = '';
+        if (statusMsg) {
+            statusMsg.className = 'status';
+            statusMsg.style.display = 'none';
+        }
+    }
+
+    function showStatus(text, type = 'success') {
+        if (!statusMsg) return;
+        statusMsg.textContent = text;
+        statusMsg.className = 'status ' + type;
+        statusMsg.style.display = 'block';
+    }
+
+    async function sendToGoogle(nick, answers) {
+        // Защита от двойной отправки
+        if (state.isSending) {
+            console.log('Отправка уже идёт, подождите...');
+            return false;
+        }
+        
+        state.isSending = true;
+        if (nextBtn) nextBtn.disabled = true;
+        
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nick, answers })
+            });
+            showStatus('✅ Данные отправлены в Google Таблицу!', 'success');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            return true;
+        } catch (error) {
+            showStatus('❌ Ошибка: ' + error.message, 'error');
+            return false;
+        } finally {
+            state.isSending = false;
+            if (nextBtn) nextBtn.disabled = false;
+        }
+    }
+
+    function startSurvey() {
+        clearErrors();
+        const nick = nickInput.value.trim();
+        if (!nick) {
+            if (nickError) nickError.textContent = '❌ Введите ник!';
+            return;
+        }
+        state.nick = nick;
+        state.answers = new Array(QUESTIONS.length).fill(null);
+        state.currentIndex = 0;
+        state.isActive = true;
+        stepNick.style.display = 'none';
+        stepQuestions.style.display = 'block';
+        renderQuestion();
+        answerInput.focus();
+    }
+
+    function renderQuestion() {
+        const idx = state.currentIndex;
+        progressText.textContent = 'Вопрос ' + (idx + 1) + ' из ' + QUESTIONS.length;
+        questionText.textContent = QUESTIONS[idx];
+        answerInput.value = state.answers[idx] !== null ? state.answers[idx] : '';
+        answerError.textContent = '';
+        answerInput.focus();
+    }
+
+    async function goToNext() {
+        if (!state.isActive) return;
+        
+        // Если идёт отправка — игнорируем клик
+        if (state.isSending) {
+            console.log('Подождите, данные отправляются...');
+            return;
+        }
+
+        const val = answerInput.value.trim();
+        if (val === '' || isNaN(Number(val))) {
+            answerError.textContent = '⚠️ Введите число!';
+            return;
+        }
+        
+        clearErrors();
+        state.answers[state.currentIndex] = Number(val);
+        
+        if (state.currentIndex === QUESTIONS.length - 1) {
+            if (nextBtn) nextBtn.disabled = true;
+            await sendToGoogle(state.nick, state.answers);
+            if (nextBtn) nextBtn.disabled = false;
+            finishPlayer();
+            return;
+        }
+        
+        state.currentIndex++;
+        renderQuestion();
+    }
+
+    function finishPlayer() {
+        state.isActive = false;
+        stepQuestions.style.display = 'none';
+        stepNick.style.display = 'block';
+        nickInput.value = '';
+        nickInput.focus();
+        state.nick = '';
+        state.answers = [];
+        state.currentIndex = 0;
+        if (nextBtn) nextBtn.disabled = false;
+        state.isSending = false;
+    }
+
+    function cancelSurvey() {
+        if (!state.isActive) return;
+        state.isActive = false;
+        stepQuestions.style.display = 'none';
+        stepNick.style.display = 'block';
+        nickInput.value = '';
+        clearErrors();
+        nickInput.focus();
+        if (nextBtn) nextBtn.disabled = false;
+        state.isSending = false;
+    }
+
+    nickInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') startSurvey();
+    });
+    answerInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') goToNext();
+    });
+    startBtn.addEventListener('click', startSurvey);
+    nextBtn.addEventListener('click', goToNext);
+    resetBtn.addEventListener('click', cancelSurvey);
+    window.addEventListener('load', function() {
+        nickInput.focus();
+    });
+</script>
+</body>
+</html>
